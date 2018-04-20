@@ -25,6 +25,7 @@ function dragula (initialContainers, options) {
   var _renderTimer; // timer for setTimeout renderMirrorImage
   var _lastDropTarget = null; // last container item was over
   var _grabbed; // holds mousedown context until first mousemove
+  var _grabDelayTimer;
 
   var o = options || {};
   if (o.moves === void 0) { o.moves = always; }
@@ -40,17 +41,20 @@ function dragula (initialContainers, options) {
   if (o.ignoreInputTextSelection === void 0) { o.ignoreInputTextSelection = true; }
   if (o.deadzone === void 0) { o.deadzone = 0; }
   if (o.mirrorContainer === void 0) { o.mirrorContainer = doc.body; }
+  if ( o.grabDelay === void 0 ) {
+    o.grabDelay = 0;
+  }
 
   var drake = emitter({
-    containers: o.containers,
-    start: manualStart,
-    end: end,
-    cancel: cancel,
-    remove: remove,
-    destroy: destroy,
-    canMove: canMove,
-    dragging: false
-  });
+                        containers: o.containers,
+                        start: manualStart,
+                        end: end,
+                        cancel: cancel,
+                        remove: remove,
+                        destroy: destroy,
+                        canMove: canMove,
+                        dragging: false
+                      });
 
   if (o.removeOnSpill === true) {
     drake.on('over', spillOver).on('out', spillOut);
@@ -66,10 +70,35 @@ function dragula (initialContainers, options) {
 
   function events (remove) {
     var op = remove ? 'remove' : 'add';
-    touchy(documentElement, op, 'mousedown', grab);
+    if (o.grabDelay) {
+      crossvent[op](documentElement, 'touchstart', grabWithDelay);
+      crossvent[op](documentElement, 'mousedown', grab);
+    }
+    else {
+      touchy(documentElement, op, 'mousedown', grab);
+    }
     touchy(documentElement, op, 'mouseup', release);
   }
 
+  function grabDelayMovements(remove, e) {
+    var op = remove ? 'remove' : 'add';
+    touchy(documentElement, op, 'mousemove', cancelGrabDelay);
+    touchy(documentElement, op, 'contextmenu', preventContextMenu);
+
+    clearGrabDelayTimer();
+
+    if ( !remove ) {
+      _grabDelayTimer = setTimeout(function() {
+        var context = canStart(e.target);
+        if (context) {
+          drake.emit('lift', context.item, context.source);
+        }
+        grabDelayMovements(true);
+        grab(e, true);
+      }, o.grabDelay);
+    }
+
+  }
   function eventualMovements (remove) {
     var op = remove ? 'remove' : 'add';
     touchy(documentElement, op, 'mousemove', startBecauseMouseMoved);
@@ -92,7 +121,7 @@ function dragula (initialContainers, options) {
     }
   }
 
-  function grab (e) {
+  function grab (e, immediate) {
     _moveX = e.clientX;
     _moveY = e.clientY;
 
@@ -106,6 +135,10 @@ function dragula (initialContainers, options) {
       return;
     }
     _grabbed = context;
+    if (immediate) {
+      startBecauseMouseMoved(e);
+      return;
+    }
     eventualMovements();
     if (e.type === 'mousedown') {
       if (isInput(item)) { // see also: https://github.com/bevacqua/dragula/issues/208
@@ -114,6 +147,20 @@ function dragula (initialContainers, options) {
         e.preventDefault(); // fixes https://github.com/bevacqua/dragula/issues/155
       }
     }
+  }
+
+  function grabWithDelay(e) {
+    grabDelayMovements(false, e);
+  }
+
+  function cancelGrabDelay(e) {
+    grabDelayMovements(true, e);
+  }
+
+  function preventContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
   }
 
   function startBecauseMouseMoved (e) {
@@ -243,6 +290,10 @@ function dragula (initialContainers, options) {
   }
 
   function release (e) {
+    if ( o.grabDelay ) {
+      grabDelayMovements(true);
+    }
+
     ungrab();
 
     if (!drake.dragging) {
@@ -499,6 +550,13 @@ function dragula (initialContainers, options) {
 
   function isCopy (item, container) {
     return typeof o.copy === 'boolean' ? o.copy : o.copy(item, container);
+  }
+
+  function clearGrabDelayTimer() {
+    if ( _grabDelayTimer ) {
+      clearTimeout(_grabDelayTimer);
+      _grabDelayTimer = null;
+    }
   }
 }
 

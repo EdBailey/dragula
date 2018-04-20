@@ -1,5 +1,5 @@
 {
-  "name": "@gitterhq/dragula",
+  "name": "@edbailey/dragula",
   "version": "3.7.0-a",
   "description": "Drag and drop so simple it hurts",
   "main": "dragula.js",
