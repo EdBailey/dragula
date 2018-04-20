@@ -154,7 +154,9 @@ function dragula (initialContainers, options) {
   }
 
   function cancelGrabDelay(e) {
-    grabDelayMovements(true, e);
+    if (e.movementX !== 0 || e.movementY !== 0) {
+      grabDelayMovements(true, e);
+    }
   }
 
   function preventContextMenu(e) {
